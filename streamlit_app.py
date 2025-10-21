@@ -24,21 +24,25 @@ load_dotenv()
 
 # Create credentials.json from Streamlit secrets if it doesn't exist
 # This is needed for Streamlit Cloud deployment
-if not os.path.exists('credentials.json'):
-    if hasattr(st, 'secrets') and 'gcp_service_account' in st.secrets:
-        credentials_data = {
-            "installed": {
-                "client_id": st.secrets["gcp_service_account"]["client_id"],
-                "project_id": st.secrets["gcp_service_account"]["project_id"],
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-                "client_secret": st.secrets["gcp_service_account"]["client_secret"],
-                "redirect_uris": ["http://localhost:8501", "http://localhost"]
+try:
+    if not os.path.exists('credentials.json'):
+        if hasattr(st, 'secrets') and 'gcp_service_account' in st.secrets:
+            credentials_data = {
+                "installed": {
+                    "client_id": st.secrets["gcp_service_account"]["client_id"],
+                    "project_id": st.secrets["gcp_service_account"]["project_id"],
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "client_secret": st.secrets["gcp_service_account"]["client_secret"],
+                    "redirect_uris": ["http://localhost:8501", "http://localhost"]
+                }
             }
-        }
-        with open('credentials.json', 'w') as f:
-            json.dump(credentials_data, f)
+            with open('credentials.json', 'w') as f:
+                json.dump(credentials_data, f)
+except Exception as e:
+    print(f"Warning: Could not create credentials.json: {e}")
+    pass  # Continue anyway, credentials.json might exist locally
 
 # Configure Streamlit page
 st.set_page_config(
@@ -98,10 +102,19 @@ def setup_db():
     conn.close()
 
 def get_embed_model():
-    """Lazy loading of the embedding model"""
+    """Lazy loading of the embedding model with error handling"""
     if st.session_state.embed_model is None:
-        with st.spinner("Loading AI model..."):
-            st.session_state.embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+        try:
+            with st.spinner("Loading AI model..."):
+                st.session_state.embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+        except Exception as e:
+            st.error(f"Error loading embedding model: {e}")
+            # Try a smaller model as fallback
+            try:
+                st.session_state.embed_model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
+            except Exception as e2:
+                st.error(f"Failed to load fallback model: {e2}")
+                raise
     return st.session_state.embed_model
 
 def compute_embedding(text):
@@ -616,26 +629,30 @@ def sidebar():
 # Main app
 def main():
     """Main application"""
-    # Initialize database
-    setup_db()
-    
-    # Debug: Show current page in main area
-    st.caption(f"Debug: Current page = {st.session_state.current_page}")
-    
-    # Sidebar
-    sidebar()
-    
-    # Main content based on current page
-    if st.session_state.current_page == 'landing':
-        landing_page()
-    elif st.session_state.current_page == 'import':
-        import_page()
-    elif st.session_state.current_page == 'chat':
-        chat_page()
-    else:
-        st.error(f"Unknown page: {st.session_state.current_page}")
-        st.session_state.current_page = 'landing'
-        st.rerun()
+    try:
+        # Initialize database
+        setup_db()
+        
+        # Debug: Show current page in main area
+        st.caption(f"Debug: Current page = {st.session_state.current_page}")
+        
+        # Sidebar
+        sidebar()
+        
+        # Main content based on current page
+        if st.session_state.current_page == 'landing':
+            landing_page()
+        elif st.session_state.current_page == 'import':
+            import_page()
+        elif st.session_state.current_page == 'chat':
+            chat_page()
+        else:
+            st.error(f"Unknown page: {st.session_state.current_page}")
+            st.session_state.current_page = 'landing'
+            st.rerun()
+    except Exception as e:
+        st.error(f"Application Error: {str(e)}")
+        st.exception(e)
 
 if __name__ == "__main__":
     main()
