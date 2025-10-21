@@ -22,6 +22,24 @@ from gdrive_auth_streamlit import (
 # Load environment variables
 load_dotenv()
 
+# Create credentials.json from Streamlit secrets if it doesn't exist
+# This is needed for Streamlit Cloud deployment
+if not os.path.exists('credentials.json'):
+    if hasattr(st, 'secrets') and 'gcp_service_account' in st.secrets:
+        credentials_data = {
+            "installed": {
+                "client_id": st.secrets["gcp_service_account"]["client_id"],
+                "project_id": st.secrets["gcp_service_account"]["project_id"],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                "client_secret": st.secrets["gcp_service_account"]["client_secret"],
+                "redirect_uris": ["http://localhost:8501", "http://localhost"]
+            }
+        }
+        with open('credentials.json', 'w') as f:
+            json.dump(credentials_data, f)
+
 # Configure Streamlit page
 st.set_page_config(
     page_title="IMOS - Intelligent Memory OS",
